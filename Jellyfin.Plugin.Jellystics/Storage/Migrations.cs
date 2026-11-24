@@ -39,5 +39,20 @@ internal static class Migrations
         CREATE INDEX ix_logins_version ON Logins (Version);
         CREATE TABLE Meta (Key TEXT PRIMARY KEY, Value TEXT);
         """,
+        // v2: precise data. LibraryEvents.DateCreated + "present" kind for snapshot rows, Plays.DurationRepaired.
+        // Pre-v2 "added" rows came from the snapshot or from live adds stamped with DateCreated: no precise live-add time exists, so they become "present"
+        // (DateCreated = At) and get a fresh Version so sync consumers re-read them.
+        """
+        ALTER TABLE LibraryEvents ADD COLUMN DateCreated TEXT;
+        ALTER TABLE Plays ADD COLUMN DurationRepaired INTEGER;
+        UPDATE LibraryEvents SET DateCreated = At WHERE Kind = 'added';   -- re-add rows after a removal keep "added" but get a DateCreated
+        CREATE TEMP TABLE _remap AS SELECT Id, ROW_NUMBER() OVER (ORDER BY Version) AS n FROM LibraryEvents l
+          WHERE Kind = 'added' AND Version = (SELECT MIN(Version) FROM LibraryEvents l2 WHERE l2.ItemId = l.ItemId AND l2.Kind = 'added');   -- only the first add per item is the snapshot-era row
+        UPDATE LibraryEvents SET Kind = 'present',
+          Version = (SELECT value FROM version_seq) + (SELECT n FROM _remap WHERE _remap.Id = LibraryEvents.Id)
+          WHERE Id IN (SELECT Id FROM _remap);
+        UPDATE version_seq SET value = value + (SELECT COUNT(*) FROM _remap);
+        DROP TABLE _remap;
+        """,
     };
 }

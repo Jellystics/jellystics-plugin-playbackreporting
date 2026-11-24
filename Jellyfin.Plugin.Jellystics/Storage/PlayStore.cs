@@ -14,7 +14,7 @@ public sealed class PlayStore
         "PlayedToCompletion", "DeviceId", "DeviceName", "Client", "ApplicationVersion", "RemoteEndPoint", "IsRemote", "PlayMethod",
         "AudioStreamIndex", "AudioLanguage", "AudioCodec", "SubtitleStreamIndex", "SubtitleLanguage", "StreamChanges",
         "VideoCodecFrom", "VideoCodecTo", "AudioCodecFrom", "AudioCodecTo", "Width", "Height", "Bitrate", "Framerate", "HwAccel",
-        "TranscodeReasons", "VideoRange", "IsVideoDirect", "IsAudioDirect", "SourceWidth", "SourceHeight", "VideoRangeType", "State", "LastEventAt", "Source", "Version",
+        "TranscodeReasons", "VideoRange", "IsVideoDirect", "IsAudioDirect", "SourceWidth", "SourceHeight", "VideoRangeType", "State", "LastEventAt", "Source", "DurationRepaired", "Version",
     };
 
     private static readonly string UpsertSql =
@@ -66,6 +66,41 @@ public sealed class PlayStore
     }
 
     /// <summary>Which of the given ids exist, in chunks of 500 (one IN query per chunk).</summary>
+    /// <summary>Of the given ids, those whose DurationRepaired is still NULL (rows written before schema v2).</summary>
+    public HashSet<string> IdsWithoutRepairFlag(IEnumerable<string> ids)
+    {
+        var found = new HashSet<string>();
+        using var c = _db.Open();
+        foreach (var chunk in ids.Distinct().Chunk(500))
+        {
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = $"SELECT Id FROM Plays WHERE DurationRepaired IS NULL AND Id IN ({string.Join(",", chunk.Select((_, i) => "$p" + i))})";
+            for (var i = 0; i < chunk.Length; i++) cmd.Parameters.AddWithValue("$p" + i, chunk[i]);
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) found.Add(r.GetString(0));
+        }
+        return found;
+    }
+
+    /// <summary>Sets DurationRepaired on existing rows without touching any other column (new Version so sync consumers re-read them).</summary>
+    public void SetDurationRepaired(IReadOnlyDictionary<string, bool> flags)
+    {
+        if (flags.Count == 0) return;
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        foreach (var (id, flag) in flags)
+        {
+            using var cmd = c.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = "UPDATE Plays SET DurationRepaired = $f, Version = $v WHERE Id = $id AND DurationRepaired IS NULL";
+            cmd.Parameters.AddWithValue("$f", flag ? 1 : 0);
+            cmd.Parameters.AddWithValue("$v", JellysticsDb.NextVersion(c, tx));
+            cmd.Parameters.AddWithValue("$id", id);
+            cmd.ExecuteNonQuery();
+        }
+        tx.Commit();
+    }
+
     public HashSet<string> ExistingIds(IEnumerable<string> ids)
     {
         var found = new HashSet<string>();
@@ -146,7 +181,7 @@ public sealed class PlayStore
             ["VideoCodecFrom"] = p.VideoCodecFrom, ["VideoCodecTo"] = p.VideoCodecTo, ["AudioCodecFrom"] = p.AudioCodecFrom,
             ["AudioCodecTo"] = p.AudioCodecTo, ["Width"] = p.Width, ["Height"] = p.Height, ["Bitrate"] = p.Bitrate,
             ["Framerate"] = p.Framerate, ["HwAccel"] = p.HwAccel, ["TranscodeReasons"] = p.TranscodeReasons, ["VideoRange"] = p.VideoRange, ["IsVideoDirect"] = p.IsVideoDirect, ["IsAudioDirect"] = p.IsAudioDirect, ["SourceWidth"] = p.SourceWidth, ["SourceHeight"] = p.SourceHeight, ["VideoRangeType"] = p.VideoRangeType,
-            ["State"] = p.State, ["LastEventAt"] = JellysticsDb.Iso(p.LastEventAt), ["Source"] = p.Source, ["Version"] = p.Version,
+            ["State"] = p.State, ["LastEventAt"] = JellysticsDb.Iso(p.LastEventAt), ["Source"] = p.Source, ["DurationRepaired"] = p.DurationRepaired, ["Version"] = p.Version,
         };
         foreach (var col in Cols) cmd.Parameters.AddWithValue("$" + col, Db(values[col]));
     }
@@ -174,6 +209,7 @@ public sealed class PlayStore
             AudioCodecTo = S("AudioCodecTo"), Width = N<int>("Width"), Height = N<int>("Height"), Bitrate = N<int>("Bitrate"),
             Framerate = N<float>("Framerate"), HwAccel = S("HwAccel"), TranscodeReasons = S("TranscodeReasons"), VideoRange = S("VideoRange"), IsVideoDirect = N<long>("IsVideoDirect") is { } ivd ? ivd != 0 : null, IsAudioDirect = N<long>("IsAudioDirect") is { } iad ? iad != 0 : null, SourceWidth = N<int>("SourceWidth"), SourceHeight = N<int>("SourceHeight"), VideoRangeType = S("VideoRangeType"),
             State = (string)r["State"], LastEventAt = JellysticsDb.ParseIso(r["LastEventAt"])!.Value, Source = (string)r["Source"],
+            DurationRepaired = N<long>("DurationRepaired") is { } dr ? dr != 0 : null,
             Version = (long)r["Version"],
         };
     }
