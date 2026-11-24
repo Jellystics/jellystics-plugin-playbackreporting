@@ -23,7 +23,7 @@ public class PbrImporterTests : IDisposable
     internal static string MakePbrDb(params (string date, string user, string item, string type, string name, string method, long dur)[] rows)
     {
         var path = Path.Combine(Path.GetTempPath(), $"pbr-{Guid.NewGuid():N}.db");
-        using var c = new SqliteConnection($"Data Source={path}");
+        using var c = new SqliteConnection($"Data Source={path};Pooling=False");
         c.Open();
         using (var create = c.CreateCommand())
         {
@@ -39,7 +39,6 @@ public class PbrImporterTests : IDisposable
             ins.Parameters.AddWithValue("$p", r.dur);
             ins.ExecuteNonQuery();
         }
-        SqliteConnection.ClearAllPools();
         return path;
     }
 

@@ -6,7 +6,7 @@
     "owner": "Jellystics",
     "overview": "Precise playback collector and backup for Jellystics",
     "description": "Records every playback from Jellyfin events (real watch time, pauses, seeks, tracks, transcoding) and keeps a full history that Jellystics syncs from.",
-    "imageUrl": "",
+    "imageUrl": "https://raw.githubusercontent.com/Jellystics/jellystics-plugin-playbackreporting/master/assets/logo.png",
     "versions": [
       {
         "checksum": "079f6ada349973ce1147a2effcf97bb3",

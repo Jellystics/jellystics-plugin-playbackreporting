@@ -10,10 +10,12 @@ public sealed class JellysticsDb
 
     private readonly string _connectionString;
 
-    public JellysticsDb(string path)
+    /// <param name="path">Database file.</param>
+    /// <param name="pooling">Connection pooling (on in production; tests turn it off so they never need the global ClearAllPools).</param>
+    public JellysticsDb(string path, bool pooling = true)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        _connectionString = new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadWriteCreate, Pooling = true }.ToString();
+        _connectionString = new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadWriteCreate, Pooling = pooling }.ToString();
     }
 
     public SqliteConnection Open()
