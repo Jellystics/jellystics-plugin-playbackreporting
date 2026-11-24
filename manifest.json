@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/Jellystics/jellystics-plugin-playbackreporting/master/assets/logo.png",
     "versions": [
       {
+        "checksum": "d52412cf6d51d22d1d26916e3b9937cb",
+        "version": "0.2.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/Jellystics/jellystics-plugin-playbackreporting/releases/download/v0.2.0.0/Jellyfin.Plugin.Jellystics-v0.2.0.0.zip",
+        "timestamp": "2026-11-24T08:06:29Z",
+        "changelog": "- New release v0.2.0.0"
+      },
+      {
         "checksum": "079f6ada349973ce1147a2effcf97bb3",
         "version": "0.1.0.0",
         "targetAbi": "10.11.0.0",
